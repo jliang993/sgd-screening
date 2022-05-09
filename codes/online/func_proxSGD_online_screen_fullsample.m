@@ -138,10 +138,12 @@ while(t<=maxits)
     va = Xjt' * beta_a - fj;
     
     % runing loss function value
-    f_ = fac * 1/2 * fj^2 + (1 - fac) * f_;
-    
+    % f_ = fac * 1/2 * fj^2 + (1 - fac) * f_;
+    f_val = 1/2 * (va)^2 + lam * nmxa;
+    f_ = fac * f_val + (1 - fac) * f_;
+
     % primal and dual function values
-    Pval = fac * ( 1/2 * (va)^2 + lam * nmxa ) + (1 - fac) * Pval;
+    Pval = fac * ( f_val ) + (1 - fac) * Pval;
     Dval = fac * - 1/2 * (vj^2 + 2*vj*fj) + (1 - fac) * Dval ;
     
     mfac = mfac * (1 - fac);

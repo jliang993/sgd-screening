@@ -131,6 +131,7 @@ while(t<maxits)
                 Nm = Nm(supp);
                 beta_a = beta_a(supp);
             end
+
         end
 
         % recording

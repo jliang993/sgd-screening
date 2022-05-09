@@ -91,6 +91,8 @@ while(t<maxits)
     
     % stochastic gradient
     vj = -(fj*m)/(exp(fj*(Xjt'*beta))+1);
+    
+
     sgrad = (vj*gamma) * Xjt;
     
     % stochastic gradient descent
@@ -105,15 +107,18 @@ while(t<maxits)
         % anchor point
         va = Xjt'*beta_a;
         % runing loss function value
-        f_ = fac * log(2)*m + (1-fac)*f_;
         
         if isinf(exp(-fj*va))
             vloss = -fj*va + log(1+exp(fj*va));
         else
             vloss = log(1+exp(-fj*va));
         end
+        
+        f_val = vloss*m + lam* nmxa;
+        f_ = fac* ( f_val ) + (1-fac) * f_;  
+        
         % primal and dual function values
-        Pval = fac* ( vloss*m + lam* nmxa ) + (1-fac) * Pval;
+        Pval = fac* ( f_val ) + (1-fac) * Pval;
         Dval = fac* - ( (abs(1 + vj*fj/m)>1e-18)* (1 + vj*fj/m) * log(1 + vj*fj/m+1e-18) + ...
             (abs(-vj*fj/m)>1e-18)* (-vj*fj/m) * log(-vj*fj/m+1e-18) )*m + (1-fac) * Dval;
         
@@ -126,7 +131,7 @@ while(t<maxits)
         % apply screening
         if mod(t,T/4) ==0
             gap = Pval - Dval ;
-            rk = gap + max(0, norm(Z/lam/(1-mfac),inf)-1)*f_ ;
+            rk = gap + max(0, norm(Z/lam/(1-mfac),inf)-1)*f_;
             rk = sqrt(2/1)*sqrt(rk + r_m*mfac)/lam;
             nk = nk + ((abs((Z+Z_m*mfac)/lam) + rk*sqrt(cnorm))< 1);
             
@@ -160,8 +165,8 @@ while(t<maxits)
                     idx= (1:n)';
                     supp = ones(n,1)>0;% (abs(phi_a2)>1-1e-8);
                     
-                    thresh = thresh *2; % increase the threshold
-                    % lb = lb *3;
+                    thresh = thresh+2; % increase the threshold
+                    lb = lb *3;
                     
                     ii = randperm(m, 1);
                     Gamma = Gamma(ii:end);
@@ -212,6 +217,7 @@ while(t<maxits)
             fac = 1/j;
             fj = f(j);
             Xjt = Xt(:,j);
+%             vj = -fj*expit(fj*(Xjt'*beta))*m;
             vj = -fj/(exp(fj*(Xjt'*beta))+1) *m;
             
             phi_a = - fac*vj * Xt_(:,j) + (1-fac) * phi_a;
@@ -236,8 +242,8 @@ while(t<maxits)
             cnorm = zeros(n,1);
             idx= (1:n)';
             
-            thresh = thresh *2; % increase the threshold
-            % lb = lb *3;
+            thresh = thresh + 8; % increase the threshold
+            lb = lb *3;
             
             r_m =0;
             Z_m = Z + Z_m*mfac;
@@ -282,7 +288,8 @@ for j=1:m
     fac = 1/j;
     fj = f(j);
     Xjt = Xt(:,j);
-    vj = lr_grad(Xjt'*beta,fj)*m;
+%     vj = lr_grad(Xjt'*beta,fj)*m;
+    vj = -fj*expit(fj*(Xjt'*beta)) *m;
     phi_a = - fac*vj * Xt_(:,j) + (1-fac) * phi_a;
 end
 %
@@ -321,5 +328,29 @@ end
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function x = lr_grad(z,f) % gradient of lr_loss
-x = -f/(exp(f*z)+1);
+% x = -f/(exp(f*z)+1)
+x = -f*expit(f*z);
+end
+
+%log( 1+exp(-x) )
+function y = logexp(x)
+if x>0
+    y = log(1+exp(-x));
+else
+    y = -x + log(exp(x)+1);
+end
+
+end
+
+
+%log( 1+exp(-x) ), 1/(1+exp(x)) 
+function y = expit(x)
+if x>0
+    y = exp(-x)/(exp(-x)+1);
+%     z = log(1+exp(-x));
+else
+    y = 1/(1+exp(x)) ;
+%     z = -x + log(exp(x)+1);
+end
+% z=0;
 end

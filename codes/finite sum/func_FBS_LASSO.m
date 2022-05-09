@@ -1,4 +1,4 @@
-function [beta, output, betasol] = func_SAGA_LASSO(para, rnd_idx, ifpruning)
+function [beta, output, betasol] = func_FBS_LASSO(para, ifpruning)
 
 % parameters
 n = para.n;
@@ -12,6 +12,7 @@ gamma0 = gamma;
 f = para.f;
 Xt = para.Xt;
 Nm = para.Nm0;
+X = Xt';
 
 % stop cnd, max iteration
 tol = para.tol;
@@ -21,20 +22,12 @@ maxits = para.maxits;
 beta0 = para.beta0;
 beta = beta0;
 
-% initial averaged gradient
-V = zeros(m, 1);
-mG = 0;
-for i=1:m
-    Xjt = Xt(:, i);
-    V(i) = Xjt'*beta0 - f(i);
-
-    mG = mG + V(i)* Xjt;
-end
-mG = mG /m;
-
 %%% obtain the minimizer x^\star
 ek = zeros(maxits, 1);
 sk = zeros(maxits, 1);
+ssk = zeros(maxits, 1);
+Pk = zeros(maxits, 1);
+Dk = zeros(maxits, 1);
 
 idx= (1:n)';
 ikeep = (1:n)';
@@ -43,88 +36,81 @@ k = 0;
 t = 1;
 while(t<maxits)
     % every T iterations, screening is appled
-    if mod(t, 2*m) ==0 && ifpruning
+    if mod(t, 1) ==0 && ifpruning
 
         % dual certificate
         Z = zeros(length(beta),1);
 
         % dual variable
-        v_vec = zeros(m,1);
-
         % constructing dual certificate and variable
-        for j=1:m
-            fj = f(j);
-            Xjt = Xt(:,j);
-
-            vj = Xjt'*beta - fj;
-            v_vec(j) = vj;
-
-            Z = - vj* Xjt + Z;
-        end
+        vv = f - X*beta;
+        zZ = Xt* vv;
 
         % computing dual feasible point, s.t. |X^T\theta|_\infty \leq 1
-        c = max(norm(Z,inf), 1);
-        theta = -v_vec /c;
+        c = max(norm(zZ/(lam*m),inf), 1);
+        theta = vv /c/(lam*m); %/(lam*m);
+
+        % [c, max(abs(Xt*theta))]
 
         % computing primal and dual funciton
         Dval = 0;
         Pval = 0;
         for j=1:m
-            Pval = 1/2 * v_vec(j)^2 + Pval;
-            Dval = - m*lam^2/2*(theta(j) - f(j)/lam/m)^2 + Dval;
+            Pval = 1/2 * vv(j)^2 + Pval;
+            Dval = m*lam^2/2*(theta(j) - f(j)/(lam*m))^2 + Dval;
         end
         Pval = Pval/m + lam*norm(beta,1);
-        Dval = Dval + norm(f)^2/2/m;
+        Dval = - Dval + norm(f)^2/2/m;
+
+        Pk(t) = Pval;
+        Dk(t) = Dval;
 
         % duality gap
         gap = Pval - Dval;
 
         % radius of safe region
-        rk = sqrt(2*gap/m)/lam;
+        rk = sqrt(2*gap/m) /lam;
 
         % safe rule
-        nk = (abs(Z/c) + rk*Nm) < 1;
+        ck = theta;
+        nk = (abs(Xt*ck) + rk*Nm) < 1;
 
         % pruning
         if 1 % && mod(t,T) == 0
             supp = (nk==0);
 
-            beta = beta(supp);
-            Xt = Xt(supp,:);
+            ssk(t) = sum(supp);
 
-            idx = idx(supp);
-            Nm = Nm(supp);
+%             disp(sum(supp))
 
-            mG = mG(supp);
-            ikeep = ikeep(supp);
+%             beta = beta(supp);
+%             Xt = Xt(supp,:);
+%             X = Xt';
+% 
+%             idx = idx(supp);
+%             Nm = Nm(supp);
+% 
+%             ikeep = ikeep(supp);
         end
+
+        log2([gap; sum(supp); sum(abs(beta)>0)])
     end
 
     % previous step
     beta_old = beta;
 
-    % sampling
-    j = rnd_idx(t);
-    Xjt = Xt(:, j);
-
-    vj = Xjt'*beta - f(j);
 
     % we gradualy increasing the step-size the gain faster performance
-    gamma = min(gamma0*1.000000025^t, 2.718*gamma0);
+    gamma = m*gamma0; %min(gamma0*1.000000025^t, 2.718*gamma0);
 
-    % SAGA gradient update
-    g_diff = (vj - V(j))* Xjt;
-    gk = beta - gamma* g_diff - gamma*mG;
+    % gradient update
+    gk = beta - gamma* Xt*(X*beta - f)/m;
 
     % proximal step
     beta = sign(gk) .* max(abs(gk) - lam*gamma, 0);
 
-    % update gradient history
-    V(j) = vj;
-    mG = mG + g_diff /m;
-
     % recording
-    if mod(t,m)==0
+    if mod(t,1)==0
         k = k + 1;
 
         %%%%
@@ -148,4 +134,8 @@ output.betasol = betasol;
 
 output.ek = ek(1:k-1);
 output.sk = sk(1:k-1);
+output.ssk = ssk(1:k-1);
+
+output.Pk = Pk(1:k-1);
+output.Dk = Dk(1:k-1);
 

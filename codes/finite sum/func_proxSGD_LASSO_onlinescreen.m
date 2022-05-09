@@ -1,4 +1,4 @@
-function [beta, output, betasol] = func_proxSGD_LASSO_onlinescreen(para, rnd_idx)
+function [beta, output, betasol, f_k,Pval_k] = func_proxSGD_LASSO_onlinescreen(para, rnd_idx)
 
 % load data and parameters
 f = para.f;
@@ -48,6 +48,10 @@ Pval = 0; % running primal value
 Dval = 0; % running dual value
 r_m = 0;
 f_= 0; % loss function value, w.o. regularization
+
+f_k = zeros(maxits, 1);
+Pval_k = zeros(maxits, 1);
+
 mfac = 0;
 
 % objects for recording old values in case we screen everything out..
@@ -73,7 +77,7 @@ DD = zeros(maxits, 1);
 PP = zeros(maxits, 1);
 
 % minimal dimension
-lb = 20; %max(10, n/200);
+lb = 30; %max(10, n/200);
 
 tic
 t = 1;
@@ -105,10 +109,15 @@ while(t<maxits)
         % anchor point
         va = Xjt'*beta_a - fj;
         % runing loss function value
-        f_ = fac * 1/2 * fj^2 + (1-fac)*f_;
+        % f_ = fac * 1/2 * fj^2 + (1-fac)*f_;
+        f_val = 1/2 * (va)^2 + lam* nmxa;
+        f_ = fac* ( f_val ) + (1-fac) * f_;
         % primal and dual function values
-        Pval = fac* ( 1/2 * (va)^2 + lam* nmxa ) + (1-fac) * Pval;
+        Pval = fac* ( f_val ) + (1-fac) * Pval;
         Dval = fac* -1/2*(vj^2+2*vj*fj) + (1-fac) * Dval ;
+
+        f_k(t) = f_;
+        Pval_k(t) = Pval;
         
         mfac = mfac*(1-fac);
         
@@ -119,7 +128,7 @@ while(t<maxits)
         % apply screening
         if mod(t,T/4) == 0
             gap = Pval - Dval ;
-            rk = gap + max(0, norm(Z/lam/(1-mfac),inf)-1)*f_;
+            rk = gap + max(0, norm(Z/lam/(1-mfac),inf)-1)*f_; %min(f_, Pval);
             % rk = sqrt(2)*sqrt(rk + r_m*mfac)/lam;
             rk = sqrt(2*(rk + r_m*mfac)/m)/lam;
             nk = nk + ((abs((Z+Z_m*mfac)/lam) + rk*sqrt(cnorm))< 1);
@@ -154,8 +163,8 @@ while(t<maxits)
                     idx= (1:n)';
                     supp = ones(n,1)>0; % (abs(phi_a2)>1-1e-8);
                     
-                    thresh = thresh*2; % increase the threshold
-                    % lb = lb;
+                    thresh = thresh+2; % increase the threshold
+                    lb = lb *3;
                     
                     ii = randperm(m, 1);
                     Gamma = Gamma(ii:end);
@@ -230,8 +239,8 @@ while(t<maxits)
             cnorm = zeros(n,1);
             idx= (1:n)';
             
-            thresh = thresh * 2; % increase the threshold
-            % lb = lb *1;
+            thresh = thresh + 8; % increase the threshold
+            lb = lb *3;
             
             r_m =0;
             Z_m = Z + Z_m*mfac;
